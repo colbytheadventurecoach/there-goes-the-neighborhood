@@ -37,7 +37,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 // ================= CONSTANTS =================
 const QS = new URLSearchParams(location.search);
 const SEED = 4207, BPM = 110, SPB = 60 / BPM, SPEED = 4, HIT_DIST = 9;
-const T_SHOOT_LEAD = 0.8, T_SHOOT_LINGER = 0.35, T_MELEE = 1.25, T_THROW = 1.2;
+const T_SHOOT_LEAD = 0.8, T_SHOOT_LINGER = 0.6, T_FLY_LEAD = 1.2, T_FLY_LINGER = 0.85, T_MELEE = 1.25, T_THROW = 1.2;
 const COL_L = 0xff5fa2, COL_R = 0x22c7d6;
 
 // ================= SEEDED RNG =================
@@ -142,8 +142,8 @@ function generate(seed){
   function shootPos(kind,s){
     if(kind==='can'){ if(chance(.5)) return {x:s*rnd(4.0,5.4),y:1.24,vx:0,vy:0,prop:'fence'}; return {x:s*rnd(2.4,3.4),y:1.18,vx:0,vy:0,prop:'trash'}; }
     if(kind==='squirrel') return {x:s*rnd(3.4,5.2),y:2.62,vx:0,vy:0,prop:s<0?'treeL':'treeR'};
-    if(kind==='duck') return {x:s*rnd(.8,4.5),y:rnd(3.3,4.4),vx:-s*rnd(2,3),vy:rnd(.3,.8),prop:null};
-    return {x:s*rnd(1.3,3.6),y:rnd(1.5,2.1),vx:-s*rnd(2.5,3.5),vy:0,prop:null}; // frisbee
+    if(kind==='duck') return {x:s*rnd(.8,4.5),y:rnd(3.3,4.4),vx:-s*rnd(1.5,2.1),vy:rnd(.2,.5),prop:null};
+    return {x:s*rnd(1.3,3.6),y:rnd(1.5,2.1),vx:-s*rnd(1.8,2.4),vy:0,prop:null}; // frisbee
   }
   function addShoot(beat,kind){
     if(!ok(beat,'S')) return false;
@@ -479,7 +479,8 @@ let stats;
 const resetStats=()=>stats={score:0,combo:0,maxCombo:0,shots:0,shootHit:0,shootTotal:0,punchHit:0,punchTotal:0,slashHit:0,slashTotal:0,dodges:0,hitsTaken:0,squats:0,frames:0,fpsTime:0};
 resetStats();
 const mult=()=>1+Math.min(3,Math.floor(stats.combo/8));
-const EV=SONG.events.map(e=>({...e,spawnT:e.type==='shoot'?e.t-T_SHOOT_LEAD:e.type==='obstacle'?e.t-T_THROW:e.t-T_MELEE}));
+const isFly=e=>e.kind==='duck'||e.kind==='frisbee';
+const EV=SONG.events.map(e=>({...e,spawnT:e.type==='shoot'?e.t-(isFly(e)?T_FLY_LEAD:T_SHOOT_LEAD):e.type==='obstacle'?e.t-T_THROW:e.t-T_MELEE}));
 EV.sort((a,b)=>a.spawnT-b.spawnT);
 const PROPS=SONG.events.filter(e=>e.type==='shoot'&&e.prop).map(e=>({kind:e.prop,x:e.x,t:e.t,spawnT:e.t-15})).sort((a,b)=>a.spawnT-b.spawnT);
 const NECKS=SONG.events.filter(e=>e.type==='obstacle').map(e=>({e,t:e.t,spawnT:e.t-T_THROW-14})).sort((a,b)=>a.spawnT-b.spawnT);
@@ -571,7 +572,7 @@ function updatePlay(t,dt){
     if(!a.yee&&k>-.6){a.yee=true;_tmp.set(e.rx,2.7,z);popWord('YEEHAW!',_tmp,1.6,.7);}
     if(z>5){relObj('redneck',a.o);activeNecks.splice(i,1);}}
   // events
-  while(evI<EV.length && EV[evI].spawnT<=t){const e=EV[evI++]; if(e.t+.5<t) continue; spawn(e);}
+  while(evI<EV.length && EV[evI].spawnT<=t){const e=EV[evI++]; if(e.t+1<t) continue; spawn(e);}
   for(let i=active.length-1;i>=0;i--){
     const a=active[i],e=a.e;
     if(a.done){active.splice(i,1);continue;}
@@ -582,7 +583,7 @@ function updatePlay(t,dt){
       if(e.kind==='frisbee') o.rotation.y+=dt*14; else if(e.kind==='can'&&k>-.8) o.rotation.y+=dt*1.5;
       if(k>-SPB&&k<0){a.ring.visible=true;a.ring.position.copy(o.position);a.ring.quaternion.copy(camQ);a.ring.scale.setScalar(1+1.5*(-k/SPB));}else a.ring.visible=false;
       if(autoHit&&k>=0) hitShoot(a);
-      else if(k>T_SHOOT_LINGER){stats.combo>2&&popWord('MISS',o.position,1.2,.4);breakCombo();release(a);}
+      else if(k>(isFly(e)?T_FLY_LINGER:T_SHOOT_LINGER)){stats.combo>2&&popWord('MISS',o.position,1.2,.4);breakCombo();release(a);}
     } else if(e.type==='punch'||e.type==='slash'){
       const u=lerpPath(a,e.t-T_MELEE,T_MELEE,t,.6,o.position);
       if(a.extra){a.extra.position.copy(o.position);a.extra.position.z+=e.type==='slash'?.28:-.02;}
