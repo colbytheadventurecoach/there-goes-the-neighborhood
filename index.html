@@ -13,7 +13,7 @@ h1{font-size:clamp(30px,7.5vw,68px);line-height:1;margin:0;color:#ff4fa3;-webkit
 .sub{font-size:clamp(15px,3.6vw,22px);color:#1a1a1a;max-width:640px}
 button{font:inherit;font-weight:bold;font-size:22px;padding:14px 30px;border:4px solid #1a1a1a;border-radius:16px;background:#fff;box-shadow:5px 5px 0 #1a1a1a;cursor:pointer;color:#1a1a1a}
 button:active{transform:translate(3px,3px);box-shadow:2px 2px 0 #1a1a1a}
-#vrBtn{background:#22c7d6}#prevBtn{background:#ff8fc2}
+#vrBtn{background:#22c7d6}#prevBtn{background:#ff8fc2}#prevBtn2{background:#ff9f1c}
 #stats{font-size:clamp(16px,4vw,22px);line-height:1.5;background:#fff;border:4px solid #1a1a1a;border-radius:16px;padding:12px 22px;box-shadow:5px 5px 0 #1a1a1a;display:none;text-align:left}
 .small{font-size:14px;opacity:.75;max-width:600px}
 </style>
@@ -27,7 +27,8 @@ button:active{transform:translate(3px,3px);box-shadow:2px 2px 0 #1a1a1a}
   <div class="sub">Shoot the junk, punch the lawn ornaments, slash the pies, and lean away from your neighbors' flying garbage. On the beat.</div>
   <div id="stats"></div>
   <button id="vrBtn" style="display:none">ENTER VR</button>
-  <button id="prevBtn">PREVIEW (tap to shoot)</button>
+  <button id="prevBtn">PREVIEW LEVEL 1: THE NEIGHBORHOOD</button>
+  <button id="prevBtn2">PREVIEW LEVEL 2: BIGFOOT COUNTRY (HARD)</button>
   <div class="small" id="note">VR: pink flamingos = LEFT hand, teal gnomes = RIGHT hand. Slash pies in the arrow's direction. Lean away from thrown tires and coolers, and duck the flying 2x4s.</div>
 </div>
 <script type="module">
@@ -36,7 +37,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 // ================= CONSTANTS =================
 const QS = new URLSearchParams(location.search);
-const SEED = 4207, BPM = 110, SPB = 60 / BPM, SPEED = 4, HIT_DIST = 9;
+let SPB = 60 / 110, SPEED = 4; const HIT_DIST = 9;
 const T_SHOOT_LEAD = 0.8, T_SHOOT_LINGER = 0.6, T_FLY_LEAD = 1.2, T_FLY_LINGER = 0.85, T_MELEE = 1.25, T_THROW = 1.2;
 const COL_L = 0xff5fa2, COL_R = 0x22c7d6;
 
@@ -45,18 +46,32 @@ function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a
 const m2f = m => 440 * Math.pow(2, (m - 69) / 12);
 
 // ================= SONG + BEAT MAP (one seeded generator) =================
-const SECTIONS = [
+const SECTIONS1 = [
   ['intro',4],['funk',8,{v:0}],['build',4],['drop',8],
   ['funk',8,{v:1,lead:1}],['build',4],['drop',8],['bridge',4],
   ['funk',8,{v:2,lead:1,horns:1}],['build',2],['drop',8,{big:1}],['outro',4]
+];
+const SECTIONS2 = [
+  ['intro',4],['funk',8,{v:0,lead:1}],['build',4],['drop',8],
+  ['funk',8,{v:1,lead:1,horns:1}],['build',4],['drop',8],['bridge',8],
+  ['funk',8,{v:2,lead:1,horns:1}],['build',2],['drop',8,{big:1}],['outro',4]
+];
+const LEVELS=[
+  {name:'THE NEIGHBORHOOD',seed:4207,bpm:110,speed:4,tr:0,sections:SECTIONS1,hard:false,met:8,
+   funkPats:[['S','S','M','S'],['S','M','S','M'],['M','S','S','M']],skin:{},yell:'YEEHAW!',sky:0x8fd8ff},
+  {name:'BIGFOOT COUNTRY',seed:9113,bpm:120,speed:5,tr:5,sections:SECTIONS2,hard:true,met:10,
+   funkPats:[['S','M','M','S'],['M','S','M','M'],['M','M','S','M']],
+   skin:{can:'tincan',squirrel:'raccoon',duck:'goose',frisbee:'trout',flamingo:'toadstool',pie:'beehive',balloon:'pinecone',tire:'boulder',cooler:'loground',plank:'log',fence:'stumpTall',trash:'stump',treeL:'pineL',treeR:'pineR',redneck:'sasquatch'},
+   yell:'RAAWR!',sky:0xffd29a}
 ];
 const CH = {
   Em7:{root:40,v:[55,59,62,64]}, A9:{root:45,v:[55,59,61,64]},
   C:{root:48,v:[55,59,64,67]}, Bm:{root:47,v:[54,57,62,66]}
 };
 
-function generate(seed){
-  const R = mulberry32(seed);
+function generate(L){
+  const SPB=60/L.bpm, SECTIONS=L.sections;
+  const R = mulberry32(L.seed);
   const rnd=(a,b)=>a+R()*(b-a), pick=a=>a[(R()*a.length)|0], chance=p=>R()<p;
   const notes=[], ev=[];
   const N=(beat,inst,p={})=>notes.push({t:beat*SPB,inst,p});
@@ -66,7 +81,7 @@ function generate(seed){
   const clavSteps=[2,6,10,13].filter(()=>chance(.85)); if(!clavSteps.length) clavSteps.push(6);
   const leadPhrase=()=>{const sc=[64,67,69,71,74,76,79];const ph=[];let st=0,ix=3;while(st<28){const len=pick([2,2,2,3,4,1,6]);if(chance(.78)){ix=Math.max(0,Math.min(sc.length-1,ix+pick([-2,-1,-1,0,1,1,2])));ph.push([st,sc[ix],Math.min(len,4)*.25*SPB*.9]);}st+=len;}return ph;};
   const leads=[leadPhrase(),leadPhrase()];
-  const wobPat=[]; for(let i=0;i<16;i++) wobPat.push(pick([1,2,2,3,4]));
+  const wobPat=[]; for(let i=0;i<16;i++) wobPat.push(pick(L.hard?[2,3,4,4,6]:[1,2,2,3,4]));
   const dropOff=[]; for(let i=0;i<8;i++) dropOff.push(pick([0,0,12,7]));
 
   const sections=[]; let bar=0;
@@ -129,6 +144,7 @@ function generate(seed){
     bar+=bars;
   }
   notes.sort((a,b)=>a.t-b.t);
+  if(L.tr) for(const n of notes){const q=n.p;n.p={...q};if(q.m!=null)n.p.m=q.m+L.tr;if(q.ms)n.p.ms=q.ms.map(x=>x+L.tr);}
 
   // ---------- BEAT MAP ----------
   const placed=[];
@@ -157,7 +173,7 @@ function generate(seed){
     if(!p) return false;
     ev.push({beat,t:T(beat),type:'shoot',kind,...p}); placed.push({beat,cat:'S'}); return true;
   }
-  const HTS=['mid','mid','high','low','mid','high'];
+  const HTS=L.hard?['mid','low','high','low','mid','high']:['mid','mid','high','low','mid','high'];
   let hand='L';
   function addPunch(beat,h){ if(!ok(beat,'M')) return false; ev.push({beat,t:T(beat),type:'punch',hand,h:h||pick(HTS)}); hand=hand==='L'?'R':'L'; placed.push({beat,cat:'M'}); return true; }
   function addPair(beat,h){ if(!ok(beat,'M')) return false; ev.push({beat,t:T(beat),type:'punch',hand:'L',h}); ev.push({beat,t:T(beat),type:'punch',hand:'R',h}); placed.push({beat,cat:'M'}); return true; }
@@ -175,19 +191,19 @@ function generate(seed){
     const sb=s.start, len=s.end-s.start;
     if(s.kind==='intro'){ for(const b of [8,10,12,14]) addShoot(sb+b,'can'); }
     else if(s.kind==='funk'){
-      const v=s.opt.v, pats=[['S','S','M','S'],['S','M','S','M'],['M','S','S','M']][v];
+      const v=s.opt.v, pats=L.funkPats[v];
       const nextType=(kinds[si+1]==='build')?'S':'M';
       pats.forEach((ty,pi)=>{
         const pb=sb+pi*8, nt=pi<3?pats[pi+1]:nextType;
         const lim=(ty!==nt)?5:8;
-        if(ty!==nt) addObs(pb+6);
+        if(ty!==nt) addObs(pb+6,L.hard&&chance(.35)?'duck':undefined);
         for(let b=0;b<lim;b++){
           if(ty==='S'){
-            if(v===0 && b%2 && !chance(.5)) continue;
+            if(v===0 && !L.hard && b%2 && !chance(.5)) continue;
             addShoot(pb+b,pick(shootKinds[v]));
             if(v===2 && b+.5<lim && chance(.2)) addShoot(pb+b+.5,pick(shootKinds[v]));
           } else {
-            if(b===4 && chance(.4)) addPair(pb+b,'low'); else melee(pb+b);
+            if((b===4||(L.hard&&b===0)) && chance(L.hard?.7:.4)) addPair(pb+b,'low'); else melee(pb+b);
           }
         }
       });
@@ -195,7 +211,7 @@ function generate(seed){
     else if(s.kind==='build'){ for(let b=0;b<=len-4;b++) addShoot(sb+b,pick(['duck','duck','frisbee','frisbee','can'])); }
     else if(s.kind==='drop'){
       const big=!!s.opt.big;
-      const seq=['IMP',pick(['P4','SS']),pick(big?['LP','LP','P4']:['P4','LP']),'PO',pick(['SS','P4','LP']),'DB',pick(big?['LP','SS']:['P4','LP','SS']),'PO'];
+      const seq=L.hard?['IMP',pick(['LP','SQ']),pick(['P4','SS']),'PO',pick(['SQ','LP']),'DB',pick(['SQ','LP','SS']),'PO']:['IMP',pick(['P4','SS']),pick(big?['LP','LP','P4']:['P4','LP']),'PO',pick(['SS','P4','LP']),'DB',pick(big?['LP','SS']:['P4','LP','SS']),'PO'];
       seq.forEach((p,i)=>{
         const bb=sb+i*4;
         if(p==='IMP'){addPair(bb,'mid');addPunch(bb+2,'high');addPunch(bb+3,'mid');}
@@ -204,7 +220,12 @@ function generate(seed){
         else if(p==='LP'){addPair(bb,'low');addPunch(bb+2,'high');addPunch(bb+3);}
         else if(p==='PO'){addPunch(bb);addObs(bb+2);}
         else if(p==='DB'){addPunch(bb);addObs(bb+2,'duck');}
+        else if(p==='SQ'){addPair(bb,'low');addPair(bb+2,'low');addPunch(bb+3,'high');}
       });
+    }
+    else if(s.kind==='bridge'&&L.hard){
+      addObs(sb+2); addPair(sb+4,'low'); addObs(sb+6); addPunch(sb+8,'high'); addObs(sb+10,'duck'); addPair(sb+12,'low'); addObs(sb+14);
+      addPair(sb+16,'low'); addObs(sb+18,'duck'); addPunch(sb+20,'high'); addObs(sb+22); addPair(sb+24,'low'); addObs(sb+26); addPair(sb+28,'mid'); addObs(sb+30,'duck');
     }
     else if(s.kind==='bridge'){
       addObs(sb+2); addPunch(sb+4,'mid'); addObs(sb+6); addPair(sb+8,'low'); addObs(sb+10); addPunch(sb+12,'high'); addObs(sb+14,'duck');
@@ -214,8 +235,7 @@ function generate(seed){
   ev.sort((a,b)=>a.t-b.t);
   return {notes,events:ev,sections,totalBeats:bar*4,placed};
 }
-const SONG = generate(SEED);
-const SONG_LEN = SONG.totalBeats*SPB;
+const SONGS=[]; let LV=LEVELS[0], LVI=0, SONG, SONG_LEN;
 
 // ================= AUDIO =================
 let ctx=null, master, drumBus, bassBus, dropBus, musicBus, sfxBus, noiseBuf;
@@ -374,15 +394,44 @@ function mkChunk(){
   }
   return b.build();
 }
-const chunks=[]; for(let k=0;k<4;k++){const c=mkChunk();root.add(c);chunks.push(c);}
-function placeChunks(t){for(let k=0;k<4;k++){const z=5-40*k+SPEED*t;chunks[k].position.z=(((z+114)%160)+160)%160-114;}}
-{ // backdrop (no fog)
-  const b=new Bld();
-  b.add(G.sph,0x5cc46a,[-90,-10,-230],[0,0,0],[160,60,60],0).add(G.sph,0x4fb85e,[60,-14,-240],[0,0,0],[200,70,60],0).add(G.sph,0x6ad178,[0,-20,-260],[0,0,0],[260,60,60],0);
-  for(const [x,y,z] of [[-60,55,-200],[20,70,-220],[80,50,-190],[-120,65,-210]]){b.add(G.sph,0xffffff,[x,y,z],[0,0,0],[30,12,10],0).add(G.sph,0xffffff,[x+12,y+5,z],[0,0,0],[20,14,10],0).add(G.sph,0xffffff,[x-12,y+2,z],[0,0,0],[18,10,10],0);}
-  root.add(b.build(true));
-  const sun=new THREE.Mesh(new THREE.CircleGeometry(14,24),new THREE.MeshBasicMaterial({color:0xfff176,fog:false}));sun.position.set(70,95,-250);sun.lookAt(0,1.6,0);root.add(sun);
+G.pyr=new THREE.ConeGeometry(.5,1,4); G.pyr.computeBoundingBox();
+function addPine(b,x,z,h){b.add(G.cyl,0x7a4a24,[x,h*.15,z],[0,0,0],[.45,h*.3,.45],.03);
+  b.add(G.cone,0x2f7d4a,[x,h*.42,z],[0,0,0],[h*.48,h*.45,h*.48],.05).add(G.cone,0x3a9257,[x,h*.63,z],[0,0,0],[h*.38,h*.38,h*.38],.05).add(G.cone,0x47a663,[x,h*.82,z],[0,0,0],[h*.26,h*.3,h*.26],.04);}
+function mkWoodsChunk(){
+  const b=new Bld(),L=40;
+  b.add(G.box,0xb08350,[0,-.05,-L/2],[0,0,0],[6,.1,L],0);
+  for(const x of [-1.3,1.3]) b.add(G.box,0x96693d,[x,.005,-L/2],[0,0,0],[.55,.02,L],0);
+  for(const s of [-1,1]){
+    b.add(G.box,0x5aa84c,[s*24.5,-.02,-L/2],[0,0,0],[43,.08,L],0);
+    for(let i=0;i<9;i++) addPine(b,s*srnd(8.5,26),-srnd(1,39),srnd(6,10));
+    for(let i=0;i<3;i++) b.add(G.sph,0x8e8e9a,[s*srnd(6.5,9),.2,-srnd(2,38)],[0,srnd(0,3),0],[srnd(.8,1.6),srnd(.6,1),srnd(.8,1.4)],.04);
+    const r=SR(), zc=-srnd(8,32);
+    if(r<.4){ const cx=s*14; // log cabin
+      b.add(G.box,0x9a6234,[cx,1.6,zc],[0,0,0],[6,3.2,7],.06).add(G.pri,0x2f5d3a,[cx,3.2+.25*2.6,zc],[-Math.PI/2,0,0],[8,7.7,2.6],.06)
+       .add(G.box,0x5a3418,[cx-s*3.04,1,zc],[0,0,0],[.12,2,1],.03).add(G.box,0xffe9a8,[cx-s*3.04,1.9,zc+2],[0,0,0],[.12,.9,1],.03).add(G.box,0x8e8e9a,[cx+s*1.5,4.3,zc-2],[0,0,0],[.7,2,.7],.04);
+    } else if(r<.75){ // tent + campfire
+      b.add(G.pyr,spick([0xff8c2e,0x3fb6e0,0xffd23f]),[s*10,1,zc],[0,Math.PI/4,0],[3,2,3],.05).add(G.box,0x222222,[s*8.95,.6,zc],[0,0,0],[.05,1,.6],0);
+      for(const a of [0,1.2,2.4]) b.add(G.cyl,0x7a4a24,[s*7.6,.15,zc+3],[Math.PI/2,a,0],[.16,1.1,.16],.02);
+      b.add(G.cone,0xff9f1c,[s*7.6,.45,zc+3],[0,0,0],[.5,.7,.5],.02).add(G.cone,0xffe14d,[s*7.6,.4,zc+3],[0,0,0],[.28,.45,.28],0);
+    }
+  }
+  return b.build();
 }
+const chunkSets=[],backdrops=[];
+function getChunks(li){ if(!chunkSets[li]){const a=[];for(let k=0;k<4;k++){const c=li?mkWoodsChunk():mkChunk();root.add(c);a.push(c);}chunkSets[li]=a;} return chunkSets[li]; }
+let chunks=getChunks(0);
+function placeChunks(t){for(let k=0;k<4;k++){const z=5-40*k+SPEED*t;chunks[k].position.z=(((z+114)%160)+160)%160-114;}}
+function clouds(b){for(const [x,y,z] of [[-60,55,-200],[20,70,-220],[80,50,-190],[-120,65,-210]]){b.add(G.sph,0xffffff,[x,y,z],[0,0,0],[30,12,10],0).add(G.sph,0xffffff,[x+12,y+5,z],[0,0,0],[20,14,10],0).add(G.sph,0xffffff,[x-12,y+2,z],[0,0,0],[18,10,10],0);}}
+function getBackdrop(li){ if(backdrops[li]) return backdrops[li];
+  const grp=new THREE.Group(), b=new Bld();
+  if(!li){ b.add(G.sph,0x5cc46a,[-90,-10,-230],[0,0,0],[160,60,60],0).add(G.sph,0x4fb85e,[60,-14,-240],[0,0,0],[200,70,60],0).add(G.sph,0x6ad178,[0,-20,-260],[0,0,0],[260,60,60],0); }
+  else { for(const [x,h,w,z] of [[-110,110,150,-260],[-20,140,170,-290],[90,120,160,-270],[170,90,130,-250],[-200,95,140,-250]]){
+      b.add(G.cone,0x8a7fa8,[x,h/2-10,z],[0,0,0],[w,h,w*.6],0).add(G.cone,0xffffff,[x,h-10-h*.12,z],[0,0,0],[w*.25,h*.25,w*.15],0);}
+    b.add(G.sph,0x3f8f52,[0,-20,-200],[0,0,0],[420,60,40],0); }
+  clouds(b); grp.add(b.build(true));
+  const sun=new THREE.Mesh(new THREE.CircleGeometry(14,24),new THREE.MeshBasicMaterial({color:li?0xffa94d:0xfff176,fog:false}));sun.position.set(70,li?55:95,-250);sun.lookAt(0,1.6,0);grp.add(sun);
+  root.add(grp); backdrops[li]=grp; return grp; }
+getBackdrop(0);
 
 // ---------- models ----------
 const eyes=(b,x,y,z,r=.1)=>{for(const sx of [-1,1]){b.add(G.sph,0xffffff,[x+sx*r*.9,y,z],[0,0,0],[r*1.6,r*2,r*1.2],.012).add(G.sph,0x111111,[x+sx*r*.9,y,z+r*.55],[0,0,0],[r*.6,r*.7,r*.4],0);}};
@@ -405,9 +454,30 @@ const MODELS={
   fence:()=>{const b=new Bld();for(const z of [-1,0,1]) b.add(G.box,0xffffff,[0,.52,z],[0,0,0],[.16,1.05,.16],.025);for(const y of [.35,.8]) b.add(G.box,0xf2f2f2,[0,y,0],[0,0,0],[.06,.1,2.1],.02);
     for(const z of [-.66,-.33,.33,.66]) b.add(G.box,0xffffff,[0,.48,z],[0,0,0],[.05,.95,.12],.02);return b.build();},
   trash:()=>new Bld().add(G.cyl,0x6b8e6b,[0,.45,0],[0,0,0],[.6,.9,.6],.03).add(G.cyl,0x587558,[0,.93,0],[0,0,0],[.68,.07,.68],.03).add(G.box,0x456045,[0,.99,0],[0,0,0],[.18,.06,.06],0).build(),
-  treeL:()=>mkPropTree(-1), treeR:()=>mkPropTree(1)
+  treeL:()=>mkPropTree(-1), treeR:()=>mkPropTree(1),
+  pineL:()=>mkPropTree(-1,1), pineR:()=>mkPropTree(1,1),
+  redneck:()=>mkRedneck(), sasquatch:()=>mkSasquatch(),
+  tincan:()=>new Bld().add(G.cyl,0xd9d9e0,[0,0,0],[0,0,0],[.24,.38,.24],.025).add(G.cyl,0x2f9e44,[0,0,0],[0,0,0],[.25,.2,.25],0).add(G.cyl,0xffd23f,[0,0,0],[0,0,0],[.255,.05,.255],0).build(),
+  stump:()=>new Bld().add(G.cyl,0x7a4a24,[0,.49,0],[0,0,0],[.75,.98,.75],.03).add(G.cyl,0xe0b77a,[0,.98,0],[0,0,0],[.68,.02,.68],0).add(G.cyl,0x7a4a24,[.3,.15,.2],[0,0,.8],[.18,.5,.18],.02).build(),
+  stumpTall:()=>new Bld().add(G.cyl,0x6b3f1e,[0,.525,0],[0,0,0],[.85,1.05,.85],.03).add(G.cyl,0xe0b77a,[0,1.05,0],[0,0,0],[.78,.02,.78],0).add(G.sph,0xd94c4c,[-.3,.2,.3],[0,0,0],[.25,.15,.25],.02).build(),
+  raccoon:()=>{const b=new Bld();b.add(G.sph,0x8d8d99,[0,.2,0],[0,0,0],[.38,.42,.32],.025).add(G.sph,0x8d8d99,[0,.52,.02],[0,0,0],[.32,.28,.28],.025).add(G.box,0x222222,[0,.55,.13],[0,0,0],[.3,.09,.05],0)
+    .add(G.cone,0x8d8d99,[-.11,.68,0],[0,0,0],[.09,.12,.06],.01).add(G.cone,0x8d8d99,[.11,.68,0],[0,0,0],[.09,.12,.06],.01);
+    for(let i=0;i<4;i++) b.add(G.sph,i%2?0x2a2a2a:0xb8b8c4,[0,.12+i*.13,-.26-i*.04],[.3,0,0],[.2,.16,.2],i?0:.02);
+    eyes(b,0,.56,.14,.05);b.add(G.sph,0x111111,[0,.48,.16],[0,0,0],[.06,.05,.05],0);return b.build();},
+  goose:()=>{const b=new Bld();b.add(G.sph,0x8a7f72,[0,0,0],[0,0,0],[.5,.42,.85],.03).add(G.cyl,0x1a1a1a,[0,.28,-.38],[.5,0,0],[.11,.45,.11],.015).add(G.sph,0x1a1a1a,[0,.5,-.5],[0,0,0],[.2,.18,.24],.02)
+    .add(G.box,0xffffff,[0,.47,-.48],[0,0,0],[.21,.06,.14],0).add(G.cone,0x333333,[0,.5,-.66],[-Math.PI/2,0,0],[.08,.16,.06],.01).add(G.box,0x5e554a,[0,.12,0],[0,0,0],[1.3,.05,.38],.025).add(G.sph,0xffffff,[0,-.08,.3],[0,0,0],[.3,.2,.2],0);
+    eyes(b,0,.55,-.58,.045);return b.build();},
+  trout:()=>{const b=new Bld();b.add(G.sph,0x9fc2a8,[0,0,0],[0,0,0],[.3,.34,.95],.025).add(G.box,0xff7aa8,[0,0,0],[0,0,0],[.31,.08,.7],0).add(G.cone,0x8fb39a,[0,0,.55],[Math.PI/2,0,0],[.06,.3,.4],.02)
+    .add(G.sph,0xffffff,[0,-.04,-.42],[0,0,0],[.12,.06,.06],0);eyes(b,0,.07,-.36,.05);return b.build();},
+  toadstool:()=>{const b=new Bld();b.add(G.cyl,0xfff3e0,[0,-.12,0],[0,0,0],[.18,.32,.18],.02).add(G.sph,COL_L,[0,.1,0],[0,0,0],[.52,.3,.52],.03);
+    for(const [x,z] of [[.12,.15],[-.15,.08],[0,-.18],[.18,-.05]]) b.add(G.sph,0xffffff,[x,.2,z],[0,0,0],[.08,.05,.08],0);eyes(b,0,-.08,.09,.035);return b.build();},
+  beehive:()=>{const b=new Bld();for(let i=0;i<4;i++) b.add(G.sph,i%2?0xffc83d:0xffb020,[0,.18-i*.12,0],[0,0,0],[.28+i*.06,.16,.28+i*.06],i===3?.025:0);b.add(G.sph,0x2a1a0a,[0,-.12,.2],[0,0,0],[.1,.08,.04],0);return b.build();},
+  pinecone:()=>{const b=new Bld();for(let i=0;i<4;i++) b.add(G.cone,0x8a5a2b,[0,.15-i*.1,0],[Math.PI,0,0],[.34-i*.06,.18,.34-i*.06],i?0:.025);return b.build();},
+  boulder:()=>new Bld().add(G.sph,0x8e8e9a,[0,0,0],[0,0,0],[.86,.82,.6],.035).add(G.sph,0x6f6f7d,[.15,-.1,.2],[0,0,0],[.3,.25,.25],0).build(),
+  loground:()=>new Bld().add(G.cyl,0x7a4a24,[0,0,0],[Math.PI/2,0,0],[.8,.5,.8],.035).add(G.cyl,0xe0b77a,[0,0,.25],[Math.PI/2,0,0],[.7,.02,.7],0).add(G.cyl,0xc49a5e,[0,0,.26],[Math.PI/2,0,0],[.35,.02,.35],0).build(),
+  log:()=>new Bld().add(G.cyl,0x7a4a24,[0,0,0],[0,0,Math.PI/2],[.14,2.4,.14],.03).add(G.cyl,0xe0b77a,[1.2,0,0],[0,0,Math.PI/2],[.12,.02,.12],0).build()
 };
-function mkPropTree(s){const b=new Bld();const tx=s*.9,tz=-1.6;b.add(G.cyl,0x8a5a2b,[tx,1.3,tz],[0,0,0],[.4,2.6,.4]).add(G.sph,0x3fae4f,[tx+s*.2,3.4,tz-.4],[0,0,0],[2.6,2.2,2.6],.05);
+function mkPropTree(s,pine){const b=new Bld();const tx=s*.9,tz=-1.6;if(pine){addPine(b,tx,tz-.2,7);}else b.add(G.cyl,0x8a5a2b,[tx,1.3,tz],[0,0,0],[.4,2.6,.4]).add(G.sph,0x3fae4f,[tx+s*.2,3.4,tz-.4],[0,0,0],[2.6,2.2,2.6],.05);
   const dx=-tx,dz=-tz,L=Math.hypot(dx,dz);b.add(G.cyl,0x8a5a2b,[tx/2,2.42,tz/2],[Math.PI/2,0,-Math.atan2(dx,dz)],[.14,L+.2,.14],.02);
   // that rotation: cylinder y axis -> z (via x rot) then yaw toward origin
   return b.build();}
@@ -424,6 +494,19 @@ function mkRedneck(){
   const arm=new Bld().add(G.cyl,skin,[0,-.3,0],[0,0,0],[.14,.6,.14],.025).add(G.sph,skin,[0,-.64,0],[0,0,0],[.18,.18,.18],.02).build();
   pivot.add(arm);g.add(pivot);g.userData.arm=pivot;return g;
 }
+function mkSasquatch(){
+  const fur=spick([0x6b4226,0x7a4a2a,0x5a3a22]),face=0xc9a27e,b=new Bld();
+  for(const x of [-.28,.28]){b.add(G.cyl,fur,[x,.55,0],[0,0,0],[.42,1.1,.42],.04).add(G.box,0x3a2414,[x,.08,.12],[0,0,0],[.42,.16,.7],.03);}
+  b.add(G.sph,fur,[0,1.65,0],[0,0,0],[1.25,1.45,.95],.05).add(G.sph,face,[0,1.6,.3],[0,0,0],[.7,.8,.4],0)
+   .add(G.sph,fur,[0,2.55,0],[0,0,0],[.75,.75,.7],.045).add(G.sph,face,[0,2.5,.25],[0,0,0],[.5,.48,.3],0).add(G.cone,fur,[0,2.98,-.05],[0,0,0],[.4,.35,.4],.03)
+   .add(G.box,0x2a1a0a,[0,2.66,.36],[0,0,0],[.5,.08,.08],0).add(G.sph,0x3a2414,[0,2.48,.42],[0,0,0],[.16,.12,.1],0).add(G.box,0x1a1a1a,[0,2.33,.38],[0,0,0],[.26,.08,.04],0).add(G.box,0xffffff,[0,2.36,.4],[0,0,0],[.2,.04,.02],0)
+   .add(G.cyl,fur,[-.72,1.55,0],[0,0,.25],[.26,1.2,.26],.035).add(G.sph,face,[-.88,.98,0],[0,0,0],[.28,.28,.28],.02);
+  eyes(b,0,2.58,.33,.09);
+  const g=b.build();
+  const pivot=new THREE.Group();pivot.position.set(.72,2.05,0);
+  const arm=new Bld().add(G.cyl,fur,[0,-.55,0],[0,0,0],[.26,1.1,.26],.035).add(G.sph,face,[0,-1.15,0],[0,0,0],[.3,.3,.3],.02).build();
+  pivot.add(arm);g.add(pivot);g.userData.arm=pivot;return g;
+}
 function mkGun(col){
   const b=new Bld();
   b.add(G.cyl,0xffd23f,[0,0,-.2],[Math.PI/2,0,0],[.055,.3,.055],.012).add(G.cyl,col,[0,0,-.36],[Math.PI/2,0,0],[.07,.04,.07],.01)
@@ -436,7 +519,7 @@ function mkGun(col){
 function comicText(g,txt,x,y,size,fill,stroke='#161616',lw){g.font=`900 ${size}px 'Comic Sans MS','Chalkboard SE','Marker Felt',sans-serif`;g.textAlign='center';g.textBaseline='middle';g.lineJoin='round';g.lineWidth=lw??size*.16;g.strokeStyle=stroke;g.strokeText(txt,x,y);g.fillStyle=fill;g.fillText(txt,x,y);}
 function canvasPlane(w,h,cw,ch,order=10){const c=document.createElement('canvas');c.width=cw;c.height=ch;const tex=new THREE.CanvasTexture(c);tex.colorSpace=THREE.SRGBColorSpace;
   const m=new THREE.Mesh(new THREE.PlaneGeometry(w,h),new THREE.MeshBasicMaterial({map:tex,transparent:true,depthWrite:false,fog:false}));m.renderOrder=order;return {c,g:c.getContext('2d'),tex,m};}
-const WORDCOL={'BULLSEYE!':'#ffd400','NICE!':'#7CFC00','GOOD':'#8fd3ff','OK':'#ffffff','POW!':'#ff5fa2','WHAM!':'#22c7d6','SPLAT!':'#ffffff','BONK!':'#ff3b30','YEEHAW!':'#ffd400','MISS':'#bbbbbb','OOPS':'#ffa766','DODGE!':'#7CFC00'};
+const WORDCOL={'BULLSEYE!':'#ffd400','NICE!':'#7CFC00','GOOD':'#8fd3ff','OK':'#ffffff','POW!':'#ff5fa2','WHAM!':'#22c7d6','SPLAT!':'#ffffff','BONK!':'#ff3b30','YEEHAW!':'#ffd400','RAAWR!':'#ff9f1c','MISS':'#bbbbbb','OOPS':'#ffa766','DODGE!':'#7CFC00'};
 const WORDMAT={};
 for(const w in WORDCOL){const c=document.createElement('canvas');c.width=512;c.height=192;const g=c.getContext('2d');comicText(g,w,256,96,w.length>6?92:120,WORDCOL[w]);const tex=new THREE.CanvasTexture(c);tex.colorSpace=THREE.SRGBColorSpace;WORDMAT[w]=new THREE.SpriteMaterial({map:tex,transparent:true,depthWrite:false,fog:false});}
 const fxPool=[];for(let i=0;i<14;i++){const s=new THREE.Sprite(WORDMAT['POW!']);s.visible=false;s.renderOrder=20;root.add(s);fxPool.push({s,t0:-9,dur:.5,base:1});}
@@ -455,11 +538,13 @@ const haloGeo=new THREE.RingGeometry(.25,.33,24);
 
 // ---------- pools ----------
 const pools={};
-function getObj(kind){const p=pools[kind]||(pools[kind]=[]);let o=p.pop();if(!o){o=kind==='redneck'?mkRedneck():MODELS[kind]();root.add(o);}o.visible=true;o.scale.setScalar(1);o.rotation.set(0,0,0);return o;}
+const SK=k=>LV.skin[k]||k;
+function getObj(kind){const p=pools[kind]||(pools[kind]=[]);let o=p.pop();if(!o){o=MODELS[kind]();root.add(o);}o.visible=true;o.scale.setScalar(1);o.rotation.set(0,0,0);return o;}
 function relObj(kind,o){o.visible=false;(pools[kind]||(pools[kind]=[])).push(o);}
 const ringPool=[];const getRing=()=>{let r=ringPool.pop();if(!r){r=new THREE.Mesh(ringGeo,ringMat);r.renderOrder=15;root.add(r);}r.visible=false;return r;};
 // prewarm pools (avoids hitches mid-song)
-for(const k of ['can','can','duck','frisbee','squirrel','flamingo','flamingo','gnome','gnome','pie','balloon','tire','cooler','plank','fence','fence','trash','trash','treeL','treeR','redneck','redneck','redneck']) relObj(k,getObj(k));
+const PREWARM=['can','can','duck','frisbee','squirrel','flamingo','flamingo','gnome','gnome','pie','balloon','tire','cooler','plank','fence','fence','trash','trash','treeL','treeR','redneck','redneck','redneck'];
+function prewarm(){const got=PREWARM.map(k=>[SK(k),getObj(SK(k))]);for(const [k,o] of got) relObj(k,o);}
 
 // ---------- HUD ----------
 const hud=canvasPlane(2.4,.56,1024,240,30); root.add(hud.m);
@@ -470,7 +555,8 @@ function drawHud(){const g=hud.g;g.clearRect(0,0,1024,240);comicText(g,String(st
 const panel=canvasPlane(2.6,1.7,1024,670,25); root.add(panel.m); panel.m.visible=false;
 function drawPanel(lines,title){const g=panel.g;g.clearRect(0,0,1024,670);g.fillStyle='#ffd640';g.strokeStyle='#161616';g.lineWidth=14;g.beginPath();g.roundRect(10,10,1004,650,40);g.fill();g.stroke();
   comicText(g,title,512,80,64,'#ff4fa3');let y=170;for(const l of lines){comicText(g,l,512,y,l.length>30?36:44,'#ffffff','#161616',8);y+=56;}panel.tex.needsUpdate=true;}
-const startCan=getObj('can'); const startPost=getObj('fence'); startCan.visible=startPost.visible=false;
+const starts=[0,1].map(i=>{const c=getObj('can'),p=getObj('fence');c.visible=p.visible=false;if(i){const l=MODELS.stumpTall();l.visible=false;root.add(l);return {c,p,alt:l,lvl:1};}return {c,p,lvl:0};});
+const showStarts=v=>{for(const s of starts){s.c.visible=v;s.p.visible=v&&!s.alt;if(s.alt)s.alt.visible=v;}};
 
 // ================= GAME STATE =================
 let state='title', mode='flat', H=1.65, curT=0, autoHit=QS.has('auto');
@@ -480,10 +566,17 @@ const resetStats=()=>stats={score:0,combo:0,maxCombo:0,shots:0,shootHit:0,shootT
 resetStats();
 const mult=()=>1+Math.min(3,Math.floor(stats.combo/8));
 const isFly=e=>e.kind==='duck'||e.kind==='frisbee';
-const EV=SONG.events.map(e=>({...e,spawnT:e.type==='shoot'?e.t-(isFly(e)?T_FLY_LEAD:T_SHOOT_LEAD):e.type==='obstacle'?e.t-T_THROW:e.t-T_MELEE}));
+let EV,PROPS,NECKS;
+function setLevel(i){
+  LVI=i; LV=LEVELS[i]; if(!SONGS[i]) SONGS[i]=generate(LV); SONG=SONGS[i]; SPB=60/LV.bpm; SPEED=LV.speed; SONG_LEN=SONG.totalBeats*SPB;
+  EV=SONG.events.map(e=>({...e,spawnT:e.type==='shoot'?e.t-(isFly(e)?T_FLY_LEAD:T_SHOOT_LEAD):e.type==='obstacle'?e.t-T_THROW:e.t-T_MELEE}));
 EV.sort((a,b)=>a.spawnT-b.spawnT);
-const PROPS=SONG.events.filter(e=>e.type==='shoot'&&e.prop).map(e=>({kind:e.prop,x:e.x,t:e.t,spawnT:e.t-15})).sort((a,b)=>a.spawnT-b.spawnT);
-const NECKS=SONG.events.filter(e=>e.type==='obstacle').map(e=>({e,t:e.t,spawnT:e.t-T_THROW-14})).sort((a,b)=>a.spawnT-b.spawnT);
+  PROPS=SONG.events.filter(e=>e.type==='shoot'&&e.prop).map(e=>({kind:SK(e.prop),x:e.x,t:e.t,spawnT:e.t-15})).sort((a,b)=>a.spawnT-b.spawnT);
+  NECKS=SONG.events.filter(e=>e.type==='obstacle').map(e=>({e,t:e.t,spawnT:e.t-T_THROW-14})).sort((a,b)=>a.spawnT-b.spawnT);
+  chunkSets.forEach(a=>a&&a.forEach(c=>c.visible=false)); chunks=getChunks(i); chunks.forEach(c=>c.visible=true);
+  backdrops.forEach(b=>b&&(b.visible=false)); getBackdrop(i).visible=true;
+  scene.background.set(LV.sky); scene.fog.color.set(LV.sky); prewarm(); placeChunks(0);
+}
 let evI=0,propI=0,neckI=0,active=[],activeProps=[],activeNecks=[];
 const head=new THREE.Vector3(), lean=new THREE.Vector3();
 let squatDown=false;
@@ -511,7 +604,7 @@ function fireVR(c){
   tryShoot(_o,_d);
 }
 function tryShoot(o,d){
-  if(state==='menu'||state==='results'){ if(startCan.visible && raySphere(o,d,startCan.position,.5)>=0){ popWord('POW!',startCan.position,.8); SFX.hit(2); startGame(); } return; }
+  if(state==='menu'||state==='results'){ for(const st of starts) if(st.c.visible && raySphere(o,d,st.c.position,.5)>=0){ popWord('POW!',st.c.position,.8); SFX.hit(2); startGame(0,st.lvl); return; } return; }
   if(state!=='play') return;
   stats.shots++;
   let best=null,bd=1e9;
@@ -541,17 +634,17 @@ function release(a){ if(a.obj) relObj(a.kind,a.obj); if(a.ring) {a.ring.visible=
 const arrowPool=[], haloPoolL=[], haloPoolR=[];
 function spawn(e){
   const a={e,done:false,kind:null,obj:null};
-  if(e.type==='shoot'){ a.kind=e.kind; a.obj=getObj(e.kind); a.ring=getRing(); stats.shootTotal++;
-    if(e.kind==='duck') a.obj.rotation.y=e.vx>0?-Math.PI/2:Math.PI/2; }
-  else if(e.type==='punch'){ a.kind=e.hand==='L'?'flamingo':'gnome'; a.obj=getObj(a.kind); stats.punchTotal++;
+  if(e.type==='shoot'){ a.kind=SK(e.kind); a.obj=getObj(a.kind); a.ring=getRing(); stats.shootTotal++;
+    if(e.kind==='duck'||a.kind==='trout') a.obj.rotation.y=e.vx>0?-Math.PI/2:Math.PI/2; }
+  else if(e.type==='punch'){ a.kind=SK(e.hand==='L'?'flamingo':'gnome'); a.obj=getObj(a.kind); stats.punchTotal++;
     const pl=e.hand==='L'?haloPoolL:haloPoolR; let h=pl.pop(); if(!h){h=new THREE.Mesh(haloGeo,e.hand==='L'?haloL:haloR);root.add(h);} h.visible=true; a.extra=h; a.extraPool=pl;
     const x=e.hand==='L'?-.32:.32, y=e.h==='high'?H+.05:e.h==='mid'?H-.3:H*.52;
     a.E=new THREE.Vector3(x,y,-.45); a.S=new THREE.Vector3(x*3,y+.5,-12); }
-  else if(e.type==='slash'){ a.kind=e.obj; a.obj=getObj(e.obj); stats.slashTotal++;
+  else if(e.type==='slash'){ a.kind=SK(e.obj); a.obj=getObj(a.kind); stats.slashTotal++;
     let ar=arrowPool.pop(); if(!ar){ar=new THREE.Mesh(arrowGeo,arrowMat);ar.renderOrder=16;root.add(ar);} ar.visible=true; ar.rotation.set(0,0,Math.atan2(e.dir[1],e.dir[0])); a.extra=ar; a.extraPool=arrowPool;
     a.E=new THREE.Vector3(e.x,H-.25,-.55); a.S=new THREE.Vector3(e.x*2,H+.6,-12); }
-  else if(e.type==='obstacle'){ a.kind=e.obj; a.obj=getObj(e.obj); a.obj.visible=false;
-    a.S=new THREE.Vector3(e.rx+(e.rx>0?.5:-.5)*.0,2.1,-12);
+  else if(e.type==='obstacle'){ a.kind=SK(e.obj); a.obj=getObj(a.kind); a.obj.visible=false;
+    a.S=new THREE.Vector3(e.rx,LV.hard?2.6:2.1,-12);
     a.E=e.kind==='duck'?new THREE.Vector3(0,H-.06,0):new THREE.Vector3(e.side*.4,H-.07,0);
     if(e.kind==='duck') a.obj.rotation.y=0; a.hit=false; }
   active.push(a);
@@ -566,11 +659,11 @@ function updatePlay(t,dt){
   while(propI<PROPS.length && PROPS[propI].spawnT<=t){const p=PROPS[propI++]; if(p.t+3<t) continue; activeProps.push({p,o:getObj(p.kind)});}
   for(let i=activeProps.length-1;i>=0;i--){const a=activeProps[i];const z=-HIT_DIST+SPEED*(t-a.p.t);a.o.position.set(a.p.x,0,z);if(z>5){relObj(a.p.kind,a.o);activeProps.splice(i,1);}}
   // rednecks
-  while(neckI<NECKS.length && NECKS[neckI].spawnT<=t){const n=NECKS[neckI++]; if(n.t<t) continue; const o=getObj('redneck'); activeNecks.push({n,o,yee:false});}
+  while(neckI<NECKS.length && NECKS[neckI].spawnT<=t){const n=NECKS[neckI++]; if(n.t<t) continue; const k=SK('redneck'),o=getObj(k); activeNecks.push({n,o,k,yee:false});}
   for(let i=activeNecks.length-1;i>=0;i--){const a=activeNecks[i],e=a.n.e,thr=e.t-T_THROW;const z=-12+SPEED*(t-thr);a.o.position.set(e.rx,0,z);a.o.rotation.y=Math.atan2(-e.rx,-z);
     const arm=a.o.userData.arm,k=t-thr; arm.rotation.x=k<-.6?Math.sin(t*3+i)*.15:k<0?2.5*Math.min(1,(k+.6)/.4):k<.15?2.5-3.8*(k/.15):k<.6?-1.3*(1-(k-.15)/.45):0;
-    if(!a.yee&&k>-.6){a.yee=true;_tmp.set(e.rx,2.7,z);popWord('YEEHAW!',_tmp,1.6,.7);}
-    if(z>5){relObj('redneck',a.o);activeNecks.splice(i,1);}}
+    if(!a.yee&&k>-.6){a.yee=true;_tmp.set(e.rx,a.k==='sasquatch'?3.5:2.7,z);popWord(LV.yell,_tmp,1.6,.7);}
+    if(z>5){relObj(a.k,a.o);activeNecks.splice(i,1);}}
   // events
   while(evI<EV.length && EV[evI].spawnT<=t){const e=EV[evI++]; if(e.t+1<t) continue; spawn(e);}
   for(let i=active.length-1;i>=0;i--){
@@ -580,7 +673,7 @@ function updatePlay(t,dt){
     if(e.type==='shoot'){
       const k=t-e.t; o.position.set(e.x+e.vx*k,e.y+e.vy*k+(e.kind==='duck'?Math.sin(t*9)*.08:0),-HIT_DIST+SPEED*k);
       const age=t-e.spawnT; o.scale.setScalar(Math.min(1,age/.12));
-      if(e.kind==='frisbee') o.rotation.y+=dt*14; else if(e.kind==='can'&&k>-.8) o.rotation.y+=dt*1.5;
+      if(a.kind==='frisbee') o.rotation.y+=dt*14; else if(a.kind==='trout') o.rotation.z=Math.sin(t*12)*.25; else if(e.kind==='can'&&k>-.8) o.rotation.y+=dt*1.5;
       if(k>-SPB&&k<0){a.ring.visible=true;a.ring.position.copy(o.position);a.ring.quaternion.copy(camQ);a.ring.scale.setScalar(1+1.5*(-k/SPB));}else a.ring.visible=false;
       if(autoHit&&k>=0) hitShoot(a);
       else if(k>(isFly(e)?T_FLY_LINGER:T_SHOOT_LINGER)){stats.combo>2&&popWord('MISS',o.position,1.2,.4);breakCombo();release(a);}
@@ -633,49 +726,51 @@ const camQ=new THREE.Quaternion();
 
 // ================= FLOW =================
 const ui=document.getElementById('ui'),statsEl=document.getElementById('stats'),vrBtn=document.getElementById('vrBtn'),prevBtn=document.getElementById('prevBtn');
-function clearActive(){for(const a of active) if(!a.done) release(a);active=[];for(const a of activeProps) relObj(a.p.kind,a.o);activeProps=[];for(const a of activeNecks) relObj('redneck',a.o);activeNecks=[];}
-function startGame(seek=0){
-  clearActive(); resetStats(); evI=propI=neckI=0; squatDown=false; lean.set(0,0,0);
+function clearActive(){for(const a of active) if(!a.done) release(a);active=[];for(const a of activeProps) relObj(a.p.kind,a.o);activeProps=[];for(const a of activeNecks) relObj(a.k,a.o);activeNecks=[];}
+function startGame(seek=0,lvl=LVI){
+  clearActive(); setLevel(lvl); resetStats(); evI=propI=neckI=0; squatDown=false; lean.set(0,0,0);
   if(mode==='vr'){ H=Math.min(2.1,Math.max(1.2,head.y)); rootPos.set(head.x,0,head.z); }
   else { H=1.65; rootPos.set(0,0,0); }
   root.position.copy(rootPos);
   hud.m.position.set(0,H+.4,-4.5);
-  panel.m.visible=false; startCan.visible=startPost.visible=false;
+  panel.m.visible=false; showStarts(false);
   state='play'; curT=seek; hudDirty=true; startMusic(seek);
 }
 function endGame(){
   state='results'; stopMusic(); clearActive();
   const tot=stats.shootTotal+stats.punchTotal+stats.slashTotal, hit=stats.shootHit+stats.punchHit+stats.slashHit;
   const acc=tot?Math.round(100*hit/tot):0, fps=stats.fpsTime?Math.round(stats.frames/stats.fpsTime):0;
-  const kcal=Math.round(SONG_LEN/60*8+stats.punchHit*.12+stats.squats*.35+stats.dodges*.1);
+  const kcal=Math.round(SONG_LEN/60*LV.met+stats.punchHit*.12+stats.squats*.35+stats.dodges*.1);
   const rank=acc>=95?'S':acc>=85?'A':acc>=70?'B':acc>=50?'C':'D';
   const title=rank==='S'?'NEIGHBORHOOD LEGEND':rank==='A'?'BLOCK PARTY HERO':rank==='B'?'DECENT NEIGHBOR':rank==='C'?'HOA WARNING':'EVICTED';
   const lines=[`SCORE ${stats.score}   RANK ${rank}`,`ACCURACY ${acc}%   MAX COMBO ${stats.maxCombo}`,`TARGETS ${stats.shootHit}/${stats.shootTotal}   PUNCHES ${stats.punchHit}/${stats.punchTotal}   SLASHES ${stats.slashHit}/${stats.slashTotal}`,
     `SQUATS ${stats.squats}   DODGES ${stats.dodges}   HIT BY JUNK ${stats.hitsTaken}`,`~${kcal} kcal (rough)   AVG FPS ${fps}`];
   window.__RESULTS={...stats,acc,fps,kcal,rank};
-  if(mode==='vr'){ drawPanel([...lines,'SHOOT THE CAN TO PLAY AGAIN'],title); showVRMenu(true); }
-  else { statsEl.innerHTML=`<b>${title}</b><br>`+lines.join('<br>'); statsEl.style.display='block'; prevBtn.textContent='PLAY AGAIN (preview)'; ui.classList.remove('hide'); }
+  if(mode==='vr'){ drawPanel([LV.name,...lines,'SHOOT: LEFT CAN = LEVEL 1   RIGHT STUMP = LEVEL 2'],title); showVRMenu(true); }
+  else { statsEl.innerHTML=`<b>${title}</b><br>`+lines.join('<br>'); statsEl.style.display='block';  ui.classList.remove('hide'); }
 }
 function showVRMenu(results){
   state=results?'results':'menu';
-  if(!results) drawPanel(['Pink flamingo = LEFT fist   Teal gnome = RIGHT fist','Shoot junk ON THE BEAT (ring closes on the hit)','Slash pies the way the arrow points','Lean away from tires & coolers, duck the 2x4s','','SHOOT THE CAN TO START'],'THERE GOES THE NEIGHBORHOOD');
-  panel.m.visible=true; startCan.visible=startPost.visible=true;
+  if(!results) drawPanel(['PINK = LEFT fist    TEAL = RIGHT fist','Shoot junk ON THE BEAT (ring closes on the hit)','Slash the way the arrow points','Lean away from side throws, duck the flat ones','LEFT CAN: LEVEL 1 - THE NEIGHBORHOOD','RIGHT STUMP: LEVEL 2 - BIGFOOT COUNTRY (HARD)'],'THERE GOES THE NEIGHBORHOOD');
+  panel.m.visible=true; showStarts(true);
 }
 function placeMenu(){ // follow head while in VR menu
   if(state==='play'||mode!=='vr') return;
   const hy=Math.min(2.1,Math.max(1.2,head.y)); rootPos.set(head.x,0,head.z); root.position.copy(rootPos);
-  panel.m.position.set(0,hy+.35,-3.2); startPost.position.set(0,0,-2.2); startCan.position.set(0,1.24,-2.2); startPost.scale.setScalar(1);
+  panel.m.position.set(0,hy+.35,-3.2); for(const st of starts){const x=st.lvl?.9:-.9;st.p.position.set(x,0,-2.2);st.c.position.set(x,1.24,-2.2);if(st.alt)st.alt.position.set(x,0,-2.2);}
   hud.m.position.set(0,hy+1.4,-4.5);
 }
 vrBtn.onclick=async()=>{
   initAudio();
   try{ const s=await navigator.xr.requestSession('immersive-vr',{optionalFeatures:['local-floor','bounded-floor']});
     renderer.xr.setFoveation?.(1); await renderer.xr.setSession(s); mode='vr'; ui.classList.add('hide'); camera.rotation.set(0,0,0); lean.set(0,0,0);
-    s.addEventListener('end',()=>{mode='flat';stopMusic();clearActive();state='title';panel.m.visible=false;startCan.visible=startPost.visible=false;ui.classList.remove('hide');resize();});
+    s.addEventListener('end',()=>{mode='flat';stopMusic();clearActive();state='title';panel.m.visible=false;showStarts(false);ui.classList.remove('hide');resize();});
     showVRMenu(false);
   }catch(err){alert('Could not start VR: '+err.message);}
 };
-prevBtn.onclick=()=>{initAudio();mode='flat';ui.classList.add('hide');statsEl.style.display='none';startGame(+QS.get('seek')||0);};
+const prev2=document.getElementById('prevBtn2');
+prevBtn.onclick=()=>{initAudio();mode='flat';ui.classList.add('hide');statsEl.style.display='none';startGame(+QS.get('seek')||0,0);};
+prev2.onclick=()=>{initAudio();mode='flat';ui.classList.add('hide');statsEl.style.display='none';startGame(+QS.get('seek')||0,1);};
 if(navigator.xr) navigator.xr.isSessionSupported('immersive-vr').then(ok=>{if(ok) vrBtn.style.display='';}).catch(()=>{});
 renderer.domElement.addEventListener('pointerdown',ev=>{
   if(mode!=='flat'||state!=='play') return;
@@ -687,7 +782,7 @@ addEventListener('resize',resize);resize();
 
 // ================= LOOP =================
 let last=performance.now();
-placeChunks(0); drawHud();
+setLevel(+QS.get('level')===2?1:0); drawHud();
 renderer.setAnimationLoop(()=>{
   const now=performance.now(),rawDt=(now-last)/1000,dt=Math.min(.05,rawDt);last=now;
   if(mode==='flat'){camera.position.set(lean.x,H+lean.y,0);camera.rotation.set(.1,0,0);head.copy(camera.position);camQ.copy(camera.quaternion);}
@@ -701,7 +796,7 @@ renderer.setAnimationLoop(()=>{
   const fu=(now/1000-flashT)/.35;flashM.material.opacity=fu<1?.45*(1-fu):0;
   renderer.render(scene,camera);
 });
-window.__TGTN={SONG,EV,get stats(){return stats;},get state(){return state;},get t(){return curT;},startGame,setAuto:v=>autoHit=v};
+window.__TGTN={get SONG(){return SONG;},get EV(){return EV;},get stats(){return stats;},get state(){return state;},get t(){return curT;},startGame,setAuto:v=>autoHit=v};
 </script>
 </body>
 </html>
